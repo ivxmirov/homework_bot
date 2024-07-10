@@ -1,10 +1,11 @@
+import logging
 import os
-from datetime import time
+import requests
+import time
 from dotenv import load_dotenv
 from telebot import TeleBot
 
 load_dotenv()
-
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -14,12 +15,21 @@ RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
+REQUEST_PERIOD = 604800
 
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
+
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    filename='program.log',
+    format='%(asctime)s, %(levelname)s, %(message)s, %(name)s'
+)
+logger = logging.getLogger(__name__)
 
 
 def check_tokens():
@@ -30,7 +40,23 @@ def check_tokens():
     программы. Если отсутствует хотя бы одна переменная окружения — продолжать
     работу бота нет смысла.
     """
-    ...
+    tokens = (
+        ('PRACTICUM_TOKEN', PRACTICUM_TOKEN),
+        ('TELEGRAM_TOKEN', TELEGRAM_TOKEN),
+        ('TELEGRAM_CHAT_ID', TELEGRAM_CHAT_ID)
+    )
+    all_tokens_present = True
+    missing_tokens = []
+    for token_name, token_value in tokens:
+        if not token_value:
+            all_tokens_present = False
+            missing_tokens.append(token_name)
+    if not all_tokens_present:
+        logger.critical(
+            f'Отсутствуют следущие переменные окружения: '
+            f'{", ".join(missing_tokens)}'
+        )
+        raise KeyError('Не хватает переменных окружения.')
 
 
 def send_message(bot, message):
@@ -41,7 +67,9 @@ def send_message(bot, message):
     TELEGRAM_CHAT_ID. Принимает на вход два параметра: экземпляр класса
     TeleBot и строку с текстом сообщения.
     """
-    ...
+    chat_id = TELEGRAM_CHAT_ID
+    message = 'Вам телеграмма!'
+    bot.send_message(chat_id, message)
 
 
 def get_api_answer(timestamp):
@@ -52,7 +80,12 @@ def get_api_answer(timestamp):
     в функцию передаётся временная метка. В случае успешного запроса должна
     вернуть ответ API, приведя его из формата JSON к типам данных Python.
     """
-    ...
+    payload = {'from_date': timestamp}
+    try:
+        homework_statuses = requests.get(ENDPOINT, headers=HEADERS, params=payload)
+        return homework_statuses.json()
+    except:
+        
 
 
 def check_response(response):
@@ -83,23 +116,19 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    ...
-
-    # Создаем объект класса бота
-    bot = ...
-    timestamp = int(time.time())
-
-    time.sleep(RETRY_PERIOD)
-
+    check_tokens()
+    bot = TeleBot(token=TELEGRAM_TOKEN)
+    timestamp = int(time.time()) - REQUEST_PERIOD
     while True:
         try:
-
-            ...
-
+            get_api_answer(timestamp)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            ...
-        ...
+        finally:
+            logger.debug(
+                'Ожидаем паузу {RETRY_PERIOD} с перед новым запросом'
+            )
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
