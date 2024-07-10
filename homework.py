@@ -3,6 +3,7 @@ import os
 import requests
 import time
 from dotenv import load_dotenv
+from http import HTTPStatus
 from telebot import TeleBot
 
 load_dotenv()
@@ -30,6 +31,8 @@ logging.basicConfig(
     format='%(asctime)s, %(levelname)s, %(message)s, %(name)s'
 )
 logger = logging.getLogger(__name__)
+handler = logging.StreamHandler('my_logger.log')
+logger.addHandler(handler)
 
 
 def check_tokens():
@@ -68,8 +71,10 @@ def send_message(bot, message):
     TeleBot и строку с текстом сообщения.
     """
     chat_id = TELEGRAM_CHAT_ID
-    message = 'Вам телеграмма!'
-    bot.send_message(chat_id, message)
+    try:
+        bot.send_message(chat_id, message)
+    except Exception as error:
+        logger.error(error, exc_info=True)
 
 
 def get_api_answer(timestamp):
@@ -82,10 +87,16 @@ def get_api_answer(timestamp):
     """
     payload = {'from_date': timestamp}
     try:
-        homework_statuses = requests.get(ENDPOINT, headers=HEADERS, params=payload)
+        homework_statuses = requests.get(
+            ENDPOINT, headers=HEADERS, params=payload
+        )
+    except Exception as error:
+        logger.error(error, exc_info=True)
+    else:
+        if homework_statuses.status_code != HTTPStatus.OK:
+            logger.error('Сбой при запросе к эндпоинту', exc_info=True)
+            raise ConnectionError('Сбой при запросе к эндпоинту')
         return homework_statuses.json()
-    except:
-        
 
 
 def check_response(response):
@@ -121,12 +132,15 @@ def main():
     timestamp = int(time.time()) - REQUEST_PERIOD
     while True:
         try:
-            get_api_answer(timestamp)
+            response = get_api_answer(timestamp)
+            homework = response['homeworks'][0]
+            message = parse_status(homework)
+            send_message(bot, message)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
         finally:
             logger.debug(
-                'Ожидаем паузу {RETRY_PERIOD} с перед новым запросом'
+                'Ожидаем {RETRY_PERIOD} с перед новым запросом'
             )
             time.sleep(RETRY_PERIOD)
 
