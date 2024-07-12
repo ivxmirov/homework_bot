@@ -24,7 +24,6 @@ HOMEWORK_VERDICTS = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
-
 logging.basicConfig(
     level=logging.DEBUG,
     filename='program.log',
@@ -70,11 +69,12 @@ def send_message(bot, message):
     TELEGRAM_CHAT_ID. Принимает на вход два параметра: экземпляр класса
     TeleBot и строку с текстом сообщения.
     """
-    chat_id = TELEGRAM_CHAT_ID
     try:
-        bot.send_message(chat_id, message)
+        bot.send_message(TELEGRAM_CHAT_ID, message)
     except Exception as error:
         logger.error(error, exc_info=True)
+    else:
+        logger.debug('Сообщение успешно отправлено')
 
 
 def get_api_answer(timestamp):
@@ -107,7 +107,12 @@ def check_response(response):
     Практикум Домашка». В качестве параметра функция получает ответ API,
     приведённый к типам данных Python.
     """
-    ...
+    if not isinstance(response, dict):
+        raise TypeError('Структура данных не соответствует ожиданиям')
+    homeworks = response.get('homeworks')
+    if not isinstance(homeworks, list):
+        raise TypeError('Данные под ключом "homeworks" не являются списком')
+    return homeworks
 
 
 def parse_status(homework):
@@ -120,8 +125,18 @@ def parse_status(homework):
     отправки в Telegram строку, содержащую один из вердиктов словаря
     HOMEWORK_VERDICTS.
     """
-    ...
-
+    if 'homework_name' not in homework:
+        logger.error('В ответе отсутствует ключ "homework_name"')
+        raise KeyError('В ответе отсутствует ключ "homework_name"')
+    if 'status' not in homework:
+        logger.error('В ответе отсутствует ключ "status"')
+        raise KeyError('В ответе отсутствует ключ "status"')
+    homework_name = homework['homework_name']
+    homework_status = homework['status']
+    if homework_status not in HOMEWORK_VERDICTS:
+        logger.error('Неизвестный статус домашней работы')
+        raise KeyError('Неизвестный статус домашней работы')
+    verdict = HOMEWORK_VERDICTS[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -130,17 +145,29 @@ def main():
     check_tokens()
     bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time()) - REQUEST_PERIOD
+    status_before_checking = ''
     while True:
         try:
             response = get_api_answer(timestamp)
-            homework = response['homeworks'][0]
-            message = parse_status(homework)
+            homeworks = check_response(response)
+            if homeworks:
+                homework = homeworks[0]
+                status_after_checking = homework['status']
+            else:
+                message = 'У вас нет домашних работ на проверке'
+            if status_after_checking != status_before_checking:
+                status_before_checking = status_after_checking
+                message = parse_status(homework)
+            else:
+                logging.debug('Статус работы не изменился')
+                message = 'Статус работы не изменился'
             send_message(bot, message)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
+            logging.error(message)
         finally:
             logger.debug(
-                'Ожидаем {RETRY_PERIOD} с перед новым запросом'
+                'Ожидаем паузу {RETRY_PERIOD} с перед новым запросом'
             )
             time.sleep(RETRY_PERIOD)
 
