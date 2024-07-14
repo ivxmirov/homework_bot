@@ -1,9 +1,10 @@
 import logging
 import os
-import requests
 import time
-from dotenv import load_dotenv
 from http import HTTPStatus
+
+import requests
+from dotenv import load_dotenv
 from telebot import TeleBot
 
 load_dotenv()
@@ -16,6 +17,8 @@ RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
+# Промежуток времени в секундах. Бот будет запрашивать домашки за данный
+# период в прошлом и до настоящего времени.
 REQUEST_PERIOD = 604800
 
 HOMEWORK_VERDICTS = {
@@ -42,23 +45,10 @@ def check_tokens():
     программы. Если отсутствует хотя бы одна переменная окружения — продолжать
     работу бота нет смысла.
     """
-    tokens = (
-        ('PRACTICUM_TOKEN', PRACTICUM_TOKEN),
-        ('TELEGRAM_TOKEN', TELEGRAM_TOKEN),
-        ('TELEGRAM_CHAT_ID', TELEGRAM_CHAT_ID)
-    )
-    all_tokens_present = True
-    missing_tokens = []
-    for token_name, token_value in tokens:
-        if not token_value:
-            all_tokens_present = False
-            missing_tokens.append(token_name)
-    if not all_tokens_present:
-        logger.critical(
-            f'Отсутствуют следущие переменные окружения: '
-            f'{", ".join(missing_tokens)}'
-        )
-        raise KeyError('Не хватает переменных окружения.')
+    tokens = PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
+    if not tokens or not all(tokens):
+        logger.critical('Отсутствуют переменные окружения.')
+        raise KeyError('Отсутствуют переменные окружения.')
 
 
 def send_message(bot, message):
