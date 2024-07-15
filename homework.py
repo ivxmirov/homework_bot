@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import time
 from http import HTTPStatus
 
@@ -17,8 +18,7 @@ RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-# Промежуток времени в секундах. Бот будет запрашивать домашки за данный
-# период в прошлом и до настоящего времени.
+# Промежуток времени в секундах, соответствующий двум неделям.
 REQUEST_PERIOD = 604800
 
 HOMEWORK_VERDICTS = {
@@ -46,9 +46,9 @@ def check_tokens():
     работу бота нет смысла.
     """
     tokens = PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
-    if not tokens or not all(tokens):
+    if not all(tokens):
         logger.critical('Отсутствуют переменные окружения.')
-        raise KeyError('Отсутствуют переменные окружения.')
+        raise sys.exit('Отсутствуют переменные окружения.')
 
 
 def send_message(bot, message):
@@ -157,7 +157,7 @@ def main():
             logging.error(message)
         finally:
             logger.debug(
-                'Ожидаем паузу {RETRY_PERIOD} с перед новым запросом'
+                f'Ожидаем паузу {RETRY_PERIOD} с перед новым запросом'
             )
             time.sleep(RETRY_PERIOD)
 
